@@ -3,25 +3,6 @@
 #include <cmath>
 #include "MagicBitboards.h"
 
-void printBitboard(uint64_t bb) {
-    std::cout << "\n  a b c d e f g h\n";
-    for (int rank = 7; rank >= 0; rank--) {
-        std::cout << (rank + 1) << " ";
-        for (int file = 0; file < 8; file++) {
-            int square = rank * 8 + file;
-            if (bb & (1ULL << square)) {
-                std::cout << "X ";
-            } else {
-                std::cout << ". ";
-            }
-        }
-        std::cout << (rank + 1) << "\n";
-        std::cout << std::flush;
-    }
-    std::cout << "  a b c d e f g h\n";
-    std::cout << std::flush;
-}
-
 Chess::Chess()
 {
     _grid = new Grid(8, 8);
@@ -29,7 +10,6 @@ Chess::Chess()
         _knightBitboards[i] = generateKnightMoveBitboard(i);
     }
     initMagicBitboards();
-    // remove branching when we make the bitboards
     for(int i=0; i<128; i++) { _bitboardLookup[i] = 0; }
 
     _bitboardLookup['W'] = WHITE_PAWNS;
@@ -70,7 +50,6 @@ Bit* Chess::PieceForPlayer(const int playerNumber, ChessPiece piece)
     const char* pieces[] = { "pawn.png", "knight.png", "bishop.png", "rook.png", "queen.png", "king.png" };
 
     Bit* bit = new Bit();
-    // should possibly be cached from player class?
     const char* pieceName = pieces[piece - 1];
     std::string spritePath = std::string("") + (playerNumber == 0 ? "w_" : "b_") + pieceName;
     bit->LoadTextureFromFile(spritePath.c_str());
@@ -95,15 +74,6 @@ void Chess::setUpBoard()
 }
 
 void Chess::FENtoBoard(const std::string& fen) {
-    // convert a FEN string to a board
-    // FEN is a space delimited string with 6 fields
-    // 1: piece placement (from white's perspective)
-    // 2: active color (W or B)
-    // 3: castling availability (KQkq or -)
-    // 4: en passant target square (in algebraic notation, or -)
-    // 5: halfmove clock (number of halfmoves since the last capture or pawn advance)
-
-    // Clear the board
     _grid->forEachSquare([](ChessSquare* square, int x, int y) {
             square->setBit(nullptr);
     });
@@ -119,7 +89,7 @@ void Chess::FENtoBoard(const std::string& fen) {
             row--;
             col = 0;
         } else if (isdigit(ch)) {
-            col += ch - '0'; // Skip empty squares
+            col += ch - '0'; // skip empty squares
         } else {
             // convert ch to a piece
             ChessPiece piece = Pawn;
@@ -271,7 +241,7 @@ void Chess::addPawnBitboardMovesToList(std::vector<BitMove>& moves, const BitBoa
     if (bitboard.getData() == 0)
         return;
     bitboard.forEachBit([&](int toSquare) {
-        int fromSquare = toSquare - shift; // Correct calculation for fromSquare
+        int fromSquare = toSquare - shift;
         moves.emplace_back(fromSquare, toSquare, Pawn);
     });
 }
@@ -280,7 +250,7 @@ void Chess::generatePawnMoveList(std::vector<BitMove>& moves, const BitBoard paw
     if (pawns.getData() == 0)
         return;
 
-    // Define constants for ranks and files
+    //ranks and files
     constexpr uint64_t NotAFile(0xFEFEFEFEFEFEFEFEULL); // A file mask
     constexpr uint64_t NotHFile(0x7F7F7F7F7F7F7F7FULL); // H file mask
     constexpr uint64_t Rank3(0x0000000000FF0000ULL); // Rank 3 mask
@@ -289,11 +259,10 @@ void Chess::generatePawnMoveList(std::vector<BitMove>& moves, const BitBoard paw
     BitBoard demoRight(NotAFile);
     BitBoard demoLeft(NotHFile);
 
-    // Calculate single pawn moves forward
     BitBoard singleMoves = (color == WHITE) ? (pawns.getData() << 8) & emptySquares.getData() : (pawns.getData() >> 8) & emptySquares.getData();
-    // Calculate double pawn moves from starting rank
+
     BitBoard doubleMoves = (color == WHITE) ? ((singleMoves.getData() & Rank3) << 8) & emptySquares.getData() : ((singleMoves.getData() & Rank6) >> 8) & emptySquares.getData();
-    // Calculate left and right pawn captures
+
     BitBoard capturesLeft = (color == WHITE) ? ((pawns.getData() & NotAFile) << 7) & enemyPieces.getData() : ((pawns.getData() & NotAFile) >> 9) & enemyPieces.getData();
     BitBoard capturesRight = (color == WHITE) ? ((pawns.getData() & NotHFile) << 9) & enemyPieces.getData() : ((pawns.getData() & NotHFile) >> 7) & enemyPieces.getData();
 
@@ -302,13 +271,10 @@ void Chess::generatePawnMoveList(std::vector<BitMove>& moves, const BitBoard paw
     int captureLeftShift = (color == WHITE) ? 7 : -9;
     int captureRightShift = (color == WHITE) ? 9 : -7;
     
-    // Add single pawn moves to the list
     addPawnBitboardMovesToList(moves, singleMoves, shiftForward);
 
-    // Add double pawn moves to the list
     addPawnBitboardMovesToList(moves, doubleMoves, doubleShift);
 
-    // Add pawn captures to the list
     addPawnBitboardMovesToList(moves, capturesLeft, captureLeftShift);
     addPawnBitboardMovesToList(moves, capturesRight, captureRightShift);
 }
@@ -320,23 +286,22 @@ void Chess::addMoveIfValid(const char *state, std::vector<BitMove>& moves, int f
     }
 }
 
-// Generate moves for a pawn
 void Chess::generatePawnMoves(const char *state, std::vector<BitMove>& moves, int row, int col, int colorAsInt) 
 {
     const int direction = (colorAsInt == WHITE) ? 1 : -1;
     const int startRow = (colorAsInt == WHITE) ? 1 : 6;
 
-    // One square forward
+    // one square 
     if (stateNotation(state, row + direction, col) == '0') {
         addMoveIfValid(state, moves, row, col, row + direction, col, Pawn);
 
-        // Two squares from start row
+        // two squares from start
         if (row == startRow && stateNotation( state, row + 2 * direction, col) == '0') {
             addMoveIfValid(state, moves, row, col, row + 2 * direction, col, Pawn);
         }
     }
 
-    // Captures
+    // captures
     for (int i = -1; i <= 1; i += 2) { // -1 for left, +1 for right
         if (col + i >= 0 && col + i < 8) {
             int oppositeColor = (colorAsInt == 0) ? 1 : -1;
@@ -348,17 +313,12 @@ void Chess::generatePawnMoves(const char *state, std::vector<BitMove>& moves, in
     }
 }
 
-// Generate all possible knight moves from a square as a bitboard
-// ranks are rows or think about them as Y
-// file is columns or X
-// rank/file is a chess term but they go from 1-8, here
-// we are cheating a bit with them going 0-7
 BitBoard Chess::generateKnightMoveBitboard(int square) {
     BitBoard bitboard = 0ULL;
     int rank = square / 8;
     int file = square % 8;
     
-    // All possible L-shapes from the position
+    // the L shape combos shown in class
     std::pair<int, int> knightOffsets[] = {
         { 2, 1 }, { 2, -1 }, { -2, 1 }, { -2, -1 },
         { 1, 2 }, { 1, -2 }, { -1, 2 }, { -1, -2 }
