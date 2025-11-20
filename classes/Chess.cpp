@@ -246,37 +246,49 @@ void Chess::addPawnBitboardMovesToList(std::vector<BitMove>& moves, const BitBoa
     });
 }
 
-void Chess::generatePawnMoveList(std::vector<BitMove>& moves, const BitBoard pawns, const BitBoard emptySquares, const BitBoard enemyPieces, char color) {
-    if (pawns.getData() == 0)
-        return;
+void Chess::generatePawnMoveList(
+    std::vector<BitMove>& moves, 
+    BitBoard pawns, 
+    BitBoard emptySquares, 
+    BitBoard enemyPieces, 
+    char color)
+{
+    if (pawns.getData() == 0) return;
 
-    //ranks and files
-    constexpr uint64_t NotAFile(0xFEFEFEFEFEFEFEFEULL); // A file mask
-    constexpr uint64_t NotHFile(0x7F7F7F7F7F7F7F7FULL); // H file mask
-    constexpr uint64_t Rank3(0x0000000000FF0000ULL); // Rank 3 mask
-    constexpr uint64_t Rank6(0x0000FF0000000000ULL); // Rank 6 mask
+    constexpr uint64_t NotAFile = 0xFEFEFEFEFEFEFEFEULL; 
+    constexpr uint64_t NotHFile = 0x7F7F7F7F7F7F7F7FULL;
 
-    BitBoard demoRight(NotAFile);
-    BitBoard demoLeft(NotHFile);
+    constexpr uint64_t Rank3 = 0x0000000000FF0000ULL; 
+    constexpr uint64_t Rank6 = 0x0000FF0000000000ULL; 
 
-    BitBoard singleMoves = (color == WHITE) ? (pawns.getData() << 8) & emptySquares.getData() : (pawns.getData() >> 8) & emptySquares.getData();
+    uint64_t p = pawns.getData();
+    uint64_t empty = emptySquares.getData();
+    uint64_t enemy = enemyPieces.getData();
 
-    BitBoard doubleMoves = (color == WHITE) ? ((singleMoves.getData() & Rank3) << 8) & emptySquares.getData() : ((singleMoves.getData() & Rank6) >> 8) & emptySquares.getData();
+    BitBoard single = (color == WHITE) ? BitBoard((p << 8) & empty)
+                                       : BitBoard((p >> 8) & empty);
 
-    BitBoard capturesLeft = (color == WHITE) ? ((pawns.getData() & NotAFile) << 7) & enemyPieces.getData() : ((pawns.getData() & NotAFile) >> 9) & enemyPieces.getData();
-    BitBoard capturesRight = (color == WHITE) ? ((pawns.getData() & NotHFile) << 9) & enemyPieces.getData() : ((pawns.getData() & NotHFile) >> 7) & enemyPieces.getData();
+    BitBoard dbl = (color == WHITE)
+        ? BitBoard(((single.getData() & Rank3) << 8) & empty)
+        : BitBoard(((single.getData() & Rank6) >> 8) & empty);
 
-    int shiftForward = (color == WHITE) ? 8 : -8;
-    int doubleShift = (color == WHITE) ? 16 : -16;
-    int captureLeftShift = (color == WHITE) ? 7 : -9;
-    int captureRightShift = (color == WHITE) ? 9 : -7;
-    
-    addPawnBitboardMovesToList(moves, singleMoves, shiftForward);
+    BitBoard capturesL = (color == WHITE)
+        ? BitBoard(((p & NotAFile) << 7) & enemy)
+        : BitBoard(((p & NotHFile) >> 9) & enemy);
 
-    addPawnBitboardMovesToList(moves, doubleMoves, doubleShift);
+    BitBoard capturesR = (color == WHITE)
+        ? BitBoard(((p & NotHFile) << 9) & enemy)
+        : BitBoard(((p & NotAFile) >> 7) & enemy);
 
-    addPawnBitboardMovesToList(moves, capturesLeft, captureLeftShift);
-    addPawnBitboardMovesToList(moves, capturesRight, captureRightShift);
+    int fwdShift     = (color == WHITE) ? 8 : -8;
+    int dblShift     = (color == WHITE) ? 16 : -16;
+    int leftShift    = (color == WHITE) ? 7 : -9;
+    int rightShift   = (color == WHITE) ? 9 : -7;
+
+    addPawnBitboardMovesToList(moves, single,     fwdShift);
+    addPawnBitboardMovesToList(moves, dbl,        dblShift);
+    addPawnBitboardMovesToList(moves, capturesL,  leftShift);
+    addPawnBitboardMovesToList(moves, capturesR,  rightShift);
 }
 
 void Chess::addMoveIfValid(const char *state, std::vector<BitMove>& moves, int fromRow, int fromCol, int toRow, int toCol, ChessPiece piece) 
