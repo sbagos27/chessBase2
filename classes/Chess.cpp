@@ -365,6 +365,7 @@ BitBoard Chess::generateKnightMoveBitboard(int square) {
     return bitboard;
 }
 
+// get all moves from the position the knight(s) is in, and find all combos of the L
 void Chess::generateKnightMoves(std::vector<BitMove>& moves, BitBoard knightBoard, uint64_t occupancy) {
     knightBoard.forEachBit([&](int fromSquare) {
         BitBoard moveBitboard = BitBoard(_knightBitboards[fromSquare].getData() & occupancy);
