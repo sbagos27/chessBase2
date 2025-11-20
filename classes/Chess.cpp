@@ -291,37 +291,55 @@ void Chess::generatePawnMoveList(
     addPawnBitboardMovesToList(moves, capturesR,  rightShift);
 }
 
-void Chess::addMoveIfValid(const char *state, std::vector<BitMove>& moves, int fromRow, int fromCol, int toRow, int toCol, ChessPiece piece) 
+void Chess::addMoveIfValid(
+    const char *state,
+    std::vector<BitMove>& moves,
+    int fromRow, int fromCol,
+    int toRow, int toCol,
+    ChessPiece piece)
 {
-    if (toRow >= 0 && toRow < 8 && toCol >= 0 && toCol < 8) {
-        moves.emplace_back(fromRow*8+fromCol, toRow*8+toCol, piece);
-    }
+    if (toRow < 0 || toRow >= 8 || toCol < 0 || toCol >= 8) return;
+
+    moves.emplace_back(fromRow*8 + fromCol, toRow*8 + toCol, piece);
 }
 
-void Chess::generatePawnMoves(const char *state, std::vector<BitMove>& moves, int row, int col, int colorAsInt) 
+void Chess::generatePawnMoves(
+    const char *state,
+    std::vector<BitMove>& moves,
+    int row, int col,
+    int color)
 {
-    const int direction = (colorAsInt == WHITE) ? 1 : -1;
-    const int startRow = (colorAsInt == WHITE) ? 1 : 6;
+    const int direction = (color == WHITE) ? 1 : -1;
+    const int startRow  = (color == WHITE) ? 1 : 6;
 
-    // one square 
+    // forward 1
     if (stateNotation(state, row + direction, col) == '0') {
         addMoveIfValid(state, moves, row, col, row + direction, col, Pawn);
 
-        // two squares from start
-        if (row == startRow && stateNotation( state, row + 2 * direction, col) == '0') {
-            addMoveIfValid(state, moves, row, col, row + 2 * direction, col, Pawn);
+        // forward 2 from start
+        if (row == startRow &&
+            stateNotation(state, row + 2 * direction, col) == '0')
+        {
+            addMoveIfValid(state, moves,
+                row, col,
+                row + 2 * direction, col,
+                Pawn);
         }
     }
 
     // captures
-    for (int i = -1; i <= 1; i += 2) { // -1 for left, +1 for right
-        if (col + i >= 0 && col + i < 8) {
-            int oppositeColor = (colorAsInt == 0) ? 1 : -1;
-            int pieceColor = stateNotation( state, row + direction, col + i) >= 'a' ? BLACK : WHITE;
-            if (pieceColor == oppositeColor) {
-                addMoveIfValid(state, moves, row, col, row + direction, col + i, Pawn);
-            }
-        }
+    for (int dx : {-1, +1}) {
+        int nc = col + dx;
+        if (nc < 0 || nc >= 8) continue;
+
+        char target = stateNotation(state, row + direction, nc);
+        if (target == '0') continue; // empty
+
+        bool targetIsBlack = (target >= 'a');
+        int targetColor = targetIsBlack ? BLACK : WHITE;
+
+        if (targetColor != color)
+            addMoveIfValid(state, moves, row, col, row + direction, nc, Pawn);
     }
 }
 
@@ -360,7 +378,7 @@ void Chess::generateKingMoves(std::vector<BitMove>& moves, BitBoard kingBoard, u
     kingBoard.forEachBit([&](int fromSquare) {
         BitBoard moveBitboard = BitBoard(KingAttacks[fromSquare] & occupancy);
         moveBitboard.forEachBit([&](int toSquare) {
-           moves.emplace_back(fromSquare, toSquare, Knight);
+           moves.emplace_back(fromSquare, toSquare, King);
         });
     });
 }
@@ -369,27 +387,47 @@ std::vector<BitMove> Chess::generateAllMoves()
 {
     std::vector<BitMove> moves;
     moves.reserve(32);
+
+    // reset bitboards
+    for (int i = 0; i < e_numBitboards; i++)
+        _bitboards[i] = 0;
+
     std::string state = stateString();
 
-    for (int i=0; i<e_numBitboards; i++) {
-        _bitboards[i] = 0;
-    }
+    // load bitboards
+    for (int sq = 0; sq < 64; sq++) {
+        char c = state[sq];
+        int idx = _bitboardLookup[c];
+        _bitboards[idx] |= 1ULL << sq;
 
-    for(int i = 0; i<64; i++) {
-        int bitIndex = _bitboardLookup[state[i]];
-        _bitboards[bitIndex] |= 1ULL << i;
-        if (state[i] != '0') {
-            _bitboards[OCCUPANCY] |= 1ULL << i; 
-            _bitboards[isupper(state[i]) ? WHITE_ALL_PIECES : BLACK_ALL_PIECES] |= 1ULL << i;
+        if (c != '0') {
+            _bitboards[OCCUPANCY] |= 1ULL << sq;
+            if (isupper(c))
+                _bitboards[WHITE_ALL_PIECES] |= 1ULL << sq;
+            else
+                _bitboards[BLACK_ALL_PIECES] |= 1ULL << sq;
         }
     }
 
-    int bitIndex = _currentPlayer == WHITE ? WHITE_PAWNS : BLACK_PAWNS;
-    int oppBitIndex = _currentPlayer == WHITE ? BLACK_PAWNS : WHITE_PAWNS;
+    bool isWhite = (_currentPlayer == WHITE);
 
-    generateKnightMoves(moves, _bitboards[WHITE_KNIGHTS + bitIndex], ~_bitboards[OCCUPANCY].getData());
-    generateKingMoves  (moves, _bitboards[WHITE_KING    + bitIndex], ~_bitboards[OCCUPANCY].getData());
-    generatePawnMoveList(moves, _bitboards[WHITE_PAWNS  + bitIndex], ~_bitboards[OCCUPANCY].getData(), _bitboards[WHITE_ALL_PIECES + oppBitIndex].getData(), _currentPlayer);
+    int knightIndex = isWhite ? WHITE_KNIGHTS : BLACK_KNIGHTS;
+    int kingIndex   = isWhite ? WHITE_KING    : BLACK_KING;
+    int pawnIndex   = isWhite ? WHITE_PAWNS   : BLACK_PAWNS;
+    int enemyIndex  = isWhite ? BLACK_ALL_PIECES : WHITE_ALL_PIECES;
+
+    uint64_t empty = ~_bitboards[OCCUPANCY].getData();
+
+    // generate moves
+    generateKnightMoves(moves, _bitboards[knightIndex], empty);
+    generateKingMoves  (moves, _bitboards[kingIndex],  empty);
+    generatePawnMoveList(
+        moves, 
+        _bitboards[pawnIndex], 
+        BitBoard(empty), 
+        _bitboards[enemyIndex], 
+        _currentPlayer
+    );
 
     return moves;
 }
