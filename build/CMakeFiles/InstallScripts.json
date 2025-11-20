@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"S:/CST426_Official/chess-base-main/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

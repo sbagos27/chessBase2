@@ -1,0 +1,9 @@
+S:/CST426_Official/chess-base-main/build/CMakeFiles/Experimental.dir
+S:/CST426_Official/chess-base-main/build/CMakeFiles/Nightly.dir
+S:/CST426_Official/chess-base-main/build/CMakeFiles/Continuous.dir
+S:/CST426_Official/chess-base-main/build/CMakeFiles/NightlyMemoryCheck.dir
+S:/CST426_Official/chess-base-main/build/CMakeFiles/demo.dir
+S:/CST426_Official/chess-base-main/build/CMakeFiles/PACKAGE.dir
+S:/CST426_Official/chess-base-main/build/CMakeFiles/RUN_TESTS.dir
+S:/CST426_Official/chess-base-main/build/CMakeFiles/ALL_BUILD.dir
+S:/CST426_Official/chess-base-main/build/CMakeFiles/ZERO_CHECK.dir
