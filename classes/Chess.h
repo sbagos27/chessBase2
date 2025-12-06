@@ -53,6 +53,7 @@ public:
     void clearBoardHighlights() override;
 
     Grid* getGrid() override { return _grid; }
+    int evaluateBoard(const std::string& state);
 
 private:
     char stateNotation(const char* state, int row, int col) { return state[row * 8 + col]; }
@@ -78,13 +79,21 @@ private:
 
     //rook
     void generateRookMoves(std::vector<BitMove>& moves,BitBoard rookBoard,uint64_t occupancy,uint64_t friendlies);
-    
+
     //queen
     void generateQueenMoves(std::vector<BitMove>& moves,BitBoard queenBoard,uint64_t occupancy,uint64_t friendlies);
 
-    std::vector<BitMove> generateAllMoves();
+    std::vector<BitMove> generateAllMoves(const std::string& state, int playerColor);
+    std::vector<BitMove> generateAllMoves();  
     void addMoveIfValid(const char *state, std::vector<BitMove>& moves, int fromRow, int fromCol, int toRow, int toCol, ChessPiece piece);
 
+    // AI 
+    int negamax(std::string& state, int depth, int alpha, int beta, int playerColor);
+    void updateAI();
+
+    int posInfinite = INT_MAX;
+    int negInfinite = INT_MIN;
+    int _countMoves;
     int _currentPlayer;
     Grid* _grid;
     std::vector<BitMove>    _moves;

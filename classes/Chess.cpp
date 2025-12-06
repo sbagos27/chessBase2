@@ -428,6 +428,52 @@ void Chess::generateQueenMoves(
     });
 }
 
+std::vector<BitMove> Chess::generateAllMoves(const std::string& state, int playerColor)
+{
+    std::vector<BitMove> moves;
+    moves.reserve(32);
+
+    // Build bitboards from state string
+    for (int i=0; i<e_numBitboards; i++) {
+        _bitboards[i] = 0;
+    }
+
+    for(int i = 0; i<64; i++) {
+        int bitIndex = _bitboardLookup[state[i]];
+        _bitboards[bitIndex] |= 1ULL << i;
+    }
+    
+    bool isWhite = (_currentPlayer == WHITE);
+
+    int knightIndex = isWhite ? WHITE_KNIGHTS : BLACK_KNIGHTS;
+    int kingIndex   = isWhite ? WHITE_KING    : BLACK_KING;
+    int pawnIndex   = isWhite ? WHITE_PAWNS   : BLACK_PAWNS;
+    int bishopIndex = isWhite ? WHITE_BISHOPS : BLACK_BISHOPS;
+    int enemyIndex  = isWhite ? BLACK_ALL_PIECES : WHITE_ALL_PIECES;
+    int rookIndex   = isWhite ? WHITE_ROOKS   : BLACK_ROOKS;
+    int queenIndex  = isWhite ? WHITE_QUEENS  : BLACK_QUEENS;
+
+
+    uint64_t empty = ~_bitboards[OCCUPANCY].getData();
+
+    // generate moves
+    generateKnightMoves(moves, _bitboards[knightIndex], empty);
+    generateKingMoves  (moves, _bitboards[kingIndex],  empty);
+    generateBishopMoves(moves, _bitboards[bishopIndex],  _bitboards[OCCUPANCY].getData(), _bitboards[bishopIndex].getData());
+    generatePawnMoveList(
+        moves, 
+        _bitboards[pawnIndex], 
+        BitBoard(empty), 
+        _bitboards[enemyIndex], 
+        _currentPlayer
+    );
+    generateRookMoves(moves, _bitboards[rookIndex],_bitboards[OCCUPANCY].getData(),_bitboards[rookIndex].getData());
+
+    generateQueenMoves(moves, _bitboards[queenIndex], _bitboards[OCCUPANCY].getData(), _bitboards[queenIndex].getData());
+
+    return moves;
+}
+
 std::vector<BitMove> Chess::generateAllMoves()
 {
     std::vector<BitMove> moves;
@@ -483,4 +529,109 @@ std::vector<BitMove> Chess::generateAllMoves()
     generateQueenMoves(moves, _bitboards[queenIndex], _bitboards[OCCUPANCY].getData(), _bitboards[queenIndex].getData());
 
     return moves;
+}
+static std::map<char, int> evaluateScores = {
+    {'P', 100}, {'p', -100},    // Pawns
+    {'N', 200}, {'n', -200},    // Knights
+    {'B', 230}, {'b', -230},    // Bishops
+    {'R', 400}, {'r', -400},    // Rooks
+    {'Q', 900}, {'q', -900},    // Queens
+    {'K', 2000}, {'k', -2000},  // Kings
+    {'0', 0}                     // Empty squares
+};
+
+
+int Chess::evaluateBoard(const std::string& state) {
+    int value = 0;
+    for(char ch : state) {
+        value += evaluateScores[ch];
+    }
+    return value;
+}
+
+
+int Chess::negamax(std::string& state, int depth, int alpha, int beta, int playerColor)
+{
+    _countMoves++;
+
+    // Base case: at leaf nodes, evaluate the position
+    if (depth == 0) {
+        return evaluateBoard(state) * playerColor;
+    }
+
+    // Generate moves for THIS board state (critical!)
+    auto newMoves = generateAllMoves(state, playerColor);
+
+    int bestVal = negInfinite; // Start with worst possible value
+
+    for(auto move : newMoves) {
+        // Save the board state
+        char boardSave = state[move.to];
+        char pieceMoving = state[move.from];
+
+        // Make the move
+        state[move.to] = pieceMoving;
+        state[move.from] = '0';
+
+        // Recursively evaluate (note the negation and flipped player color)
+        bestVal = std::max(bestVal, -negamax(state, depth - 1, -beta, -alpha, -playerColor));
+
+        // Undo the move
+        state[move.from] = pieceMoving;
+        state[move.to] = boardSave;
+
+        // Alpha-beta pruning
+        alpha = std::max(alpha, bestVal);
+        if (alpha >= beta) {
+            break;  // Beta cutoff
+        }
+    }
+
+    return bestVal;
+}
+
+
+void Chess::updateAI()
+{
+    int bestVal = negInfinite;
+    BitMove bestMove;
+    std::string state = stateString();
+    _countMoves = 0;
+
+    // Search through current legal moves
+    for(auto move : _moves) {
+        char boardSave = state[move.to];
+        char pieceMoving = state[move.from];
+
+        // Make the move on our state copy
+        state[move.to] = pieceMoving;
+        state[move.from] = '0';
+
+        // Call negamax to evaluate this move
+        int moveVal = -negamax(state, 5, negInfinite, posInfinite, WHITE);
+
+        // Undo the move
+        state[move.from] = pieceMoving;
+        state[move.to] = boardSave;
+
+        // Track the best move found
+        if (moveVal > bestVal) {
+            bestMove = move;
+            bestVal = moveVal;
+        }
+    }
+
+    // Execute the best move on the actual board
+    // I’m kind of amazed this code works and will be improving it
+    if(bestVal != negInfinite) {
+        std::cout << "Moves checked: " << _countMoves << std::endl;
+        int srcSquare = bestMove.from;
+        int dstSquare = bestMove.to;
+        BitHolder& src = getHolderAt(srcSquare&7, srcSquare/8);
+        BitHolder& dst = getHolderAt(dstSquare&7, dstSquare/8);
+        Bit* bit = src.bit();
+        dst.dropBitAtPoint(bit, ImVec2(0, 0));
+        src.setBit(nullptr);
+        bitMovedFromTo(*bit, src, dst);
+    }
 }
