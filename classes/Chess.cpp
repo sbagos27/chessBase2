@@ -384,6 +384,50 @@ void Chess::generateKingMoves(std::vector<BitMove>& moves, BitBoard kingBoard, u
     });
 }
 
+void Chess::generateBishopMoves(std::vector<BitMove>& moves, BitBoard bishopBoard, uint64_t occupancy, uint64_t friendlies) {
+    bishopBoard.forEachBit([&](int fromSquare) {
+        BitBoard moveBitboard = BitBoard(getBishopAttacks(fromSquare, occupancy) & ~friendlies);
+        // Efficiently iterate through only the set bits
+        moveBitboard.forEachBit([&](int toSquare) {
+           moves.emplace_back(fromSquare, toSquare, Bishop);
+        });
+    });
+}
+
+void Chess::generateRookMoves(
+    std::vector<BitMove>& moves,
+    BitBoard rookBoard,
+    uint64_t occupancy,
+    uint64_t friendlies)
+{
+    rookBoard.forEachBit([&](int fromSquare) {
+        BitBoard moveBitboard = BitBoard(getRookAttacks(fromSquare, occupancy) & ~friendlies);
+        moveBitboard.forEachBit([&](int toSquare) {
+            moves.emplace_back(fromSquare, toSquare, Rook);
+        });
+    });
+}
+
+void Chess::generateQueenMoves(
+    std::vector<BitMove>& moves,
+    BitBoard queenBoard,
+    uint64_t occupancy,
+    uint64_t friendlies)
+{
+    queenBoard.forEachBit([&](int fromSquare) {
+
+        uint64_t attacks =
+            getRookAttacks(fromSquare, occupancy) |
+            getBishopAttacks(fromSquare, occupancy);
+
+        BitBoard moveBitboard = BitBoard(attacks & ~friendlies);
+
+        moveBitboard.forEachBit([&](int toSquare) {
+            moves.emplace_back(fromSquare, toSquare, Queen);
+        });
+    });
+}
+
 std::vector<BitMove> Chess::generateAllMoves()
 {
     std::vector<BitMove> moves;
@@ -415,13 +459,18 @@ std::vector<BitMove> Chess::generateAllMoves()
     int knightIndex = isWhite ? WHITE_KNIGHTS : BLACK_KNIGHTS;
     int kingIndex   = isWhite ? WHITE_KING    : BLACK_KING;
     int pawnIndex   = isWhite ? WHITE_PAWNS   : BLACK_PAWNS;
+    int bishopIndex = isWhite ? WHITE_BISHOPS : BLACK_BISHOPS;
     int enemyIndex  = isWhite ? BLACK_ALL_PIECES : WHITE_ALL_PIECES;
+    int rookIndex   = isWhite ? WHITE_ROOKS   : BLACK_ROOKS;
+    int queenIndex  = isWhite ? WHITE_QUEENS  : BLACK_QUEENS;
+
 
     uint64_t empty = ~_bitboards[OCCUPANCY].getData();
 
     // generate moves
     generateKnightMoves(moves, _bitboards[knightIndex], empty);
     generateKingMoves  (moves, _bitboards[kingIndex],  empty);
+    generateBishopMoves(moves, _bitboards[bishopIndex],  _bitboards[OCCUPANCY].getData(), _bitboards[bishopIndex].getData());
     generatePawnMoveList(
         moves, 
         _bitboards[pawnIndex], 
@@ -429,6 +478,9 @@ std::vector<BitMove> Chess::generateAllMoves()
         _bitboards[enemyIndex], 
         _currentPlayer
     );
+    generateRookMoves(moves, _bitboards[rookIndex],_bitboards[OCCUPANCY].getData(),_bitboards[rookIndex].getData());
+
+    generateQueenMoves(moves, _bitboards[queenIndex], _bitboards[OCCUPANCY].getData(), _bitboards[queenIndex].getData());
 
     return moves;
 }

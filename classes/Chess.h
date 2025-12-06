@@ -73,6 +73,15 @@ private:
     void addPawnBitboardMovesToList(std::vector<BitMove>& moves, const BitBoard bitboard, const int shift);
     void generatePawnMoves(const char *state, std::vector<BitMove>& moves, int row, int col, int colorAsInt);
 
+    // bishop
+    void generateBishopMoves(std::vector<BitMove>& moves, BitBoard bishopBoard, uint64_t occupancy, uint64_t friendlies);
+
+    //rook
+    void generateRookMoves(std::vector<BitMove>& moves,BitBoard rookBoard,uint64_t occupancy,uint64_t friendlies);
+    
+    //queen
+    void generateQueenMoves(std::vector<BitMove>& moves,BitBoard queenBoard,uint64_t occupancy,uint64_t friendlies);
+
     std::vector<BitMove> generateAllMoves();
     void addMoveIfValid(const char *state, std::vector<BitMove>& moves, int fromRow, int fromCol, int toRow, int toCol, ChessPiece piece);
 
