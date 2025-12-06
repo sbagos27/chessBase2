@@ -177,6 +177,9 @@ void Chess::bitMovedFromTo(Bit &bit, BitHolder &src, BitHolder &dst) {
     _moves = generateAllMoves();
     clearBoardHighlights();
     endTurn();
+    if (_currentPlayer == BLACK) {
+        updateAI();
+    }
 }
 
 void Chess::stopGame()
@@ -621,8 +624,6 @@ void Chess::updateAI()
         }
     }
 
-    // Execute the best move on the actual board
-    // I’m kind of amazed this code works and will be improving it
     if(bestVal != negInfinite) {
         std::cout << "Moves checked: " << _countMoves << std::endl;
         int srcSquare = bestMove.from;
