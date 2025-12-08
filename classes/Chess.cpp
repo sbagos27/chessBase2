@@ -10,20 +10,22 @@ Chess::Chess()
         _knightBitboards[i] = generateKnightMoveBitboard(i);
     }
     initMagicBitboards();
-    for(int i=0; i<128; i++) { _bitboardLookup[i] = 0; }
+    for(int i=0; i<128; i++) { _bitboardLookup[i] = EMPTY_SQUARES; }
 
-    _bitboardLookup['W'] = WHITE_PAWNS;
+    _bitboardLookup['P'] = WHITE_PAWNS;
     _bitboardLookup['N'] = WHITE_KNIGHTS;
     _bitboardLookup['B'] = WHITE_BISHOPS;
     _bitboardLookup['R'] = WHITE_ROOKS;
     _bitboardLookup['Q'] = WHITE_QUEENS;
     _bitboardLookup['K'] = WHITE_KING;
+
     _bitboardLookup['p'] = BLACK_PAWNS;
     _bitboardLookup['n'] = BLACK_KNIGHTS;
     _bitboardLookup['b'] = BLACK_BISHOPS;
     _bitboardLookup['r'] = BLACK_ROOKS;
     _bitboardLookup['q'] = BLACK_QUEENS;
     _bitboardLookup['k'] = BLACK_KING;
+
     _bitboardLookup['0'] = EMPTY_SQUARES;
 }
 
@@ -442,11 +444,11 @@ std::vector<BitMove> Chess::generateAllMoves(const std::string& state, int playe
     }
 
     for(int i = 0; i<64; i++) {
-        int bitIndex = _bitboardLookup[state[i]];
+        int bitIndex = _bitboardLookup[ static_cast<unsigned char>(state[i]) ];
         _bitboards[bitIndex] |= 1ULL << i;
     }
-    
-    bool isWhite = (_currentPlayer == WHITE);
+
+    bool isWhite = (playerColor == WHITE);
 
     int knightIndex = isWhite ? WHITE_KNIGHTS : BLACK_KNIGHTS;
     int kingIndex   = isWhite ? WHITE_KING    : BLACK_KING;
@@ -456,6 +458,19 @@ std::vector<BitMove> Chess::generateAllMoves(const std::string& state, int playe
     int rookIndex   = isWhite ? WHITE_ROOKS   : BLACK_ROOKS;
     int queenIndex  = isWhite ? WHITE_QUEENS  : BLACK_QUEENS;
 
+    _bitboards[OCCUPANCY] = 0;
+    _bitboards[WHITE_ALL_PIECES] = 0;
+    _bitboards[BLACK_ALL_PIECES] = 0;
+    for (int sq = 0; sq < 64; ++sq) {
+        char c = state[sq];
+        if (c != '0') {
+            _bitboards[OCCUPANCY] |= 1ULL << sq;
+            if (isupper(static_cast<unsigned char>(c)))
+                _bitboards[WHITE_ALL_PIECES] |= 1ULL << sq;
+            else
+                _bitboards[BLACK_ALL_PIECES] |= 1ULL << sq;
+        }
+    }
 
     uint64_t empty = ~_bitboards[OCCUPANCY].getData();
 
@@ -464,14 +479,13 @@ std::vector<BitMove> Chess::generateAllMoves(const std::string& state, int playe
     generateKingMoves  (moves, _bitboards[kingIndex],  empty);
     generateBishopMoves(moves, _bitboards[bishopIndex],  _bitboards[OCCUPANCY].getData(), _bitboards[bishopIndex].getData());
     generatePawnMoveList(
-        moves, 
-        _bitboards[pawnIndex], 
-        BitBoard(empty), 
-        _bitboards[enemyIndex], 
-        _currentPlayer
+        moves,
+        _bitboards[pawnIndex],
+        BitBoard(empty),
+        _bitboards[enemyIndex],
+        playerColor
     );
-    generateRookMoves(moves, _bitboards[rookIndex],_bitboards[OCCUPANCY].getData(),_bitboards[rookIndex].getData());
-
+    generateRookMoves(moves, _bitboards[rookIndex], _bitboards[OCCUPANCY].getData(), _bitboards[rookIndex].getData());
     generateQueenMoves(moves, _bitboards[queenIndex], _bitboards[OCCUPANCY].getData(), _bitboards[queenIndex].getData());
 
     return moves;
@@ -557,29 +571,23 @@ int Chess::negamax(std::string& state, int depth, int alpha, int beta, int playe
 {
     _countMoves++;
 
-    // Base case: at leaf nodes, evaluate the position
     if (depth == 0) {
         return evaluateBoard(state) * playerColor;
     }
 
-    // Generate moves for THIS board state (critical!)
     auto newMoves = generateAllMoves(state, playerColor);
 
-    int bestVal = negInfinite; // Start with worst possible value
+    int bestVal = negInfinite; 
 
     for(auto move : newMoves) {
-        // Save the board state
         char boardSave = state[move.to];
         char pieceMoving = state[move.from];
 
-        // Make the move
         state[move.to] = pieceMoving;
         state[move.from] = '0';
 
-        // Recursively evaluate (note the negation and flipped player color)
         bestVal = std::max(bestVal, -negamax(state, depth - 1, -beta, -alpha, -playerColor));
 
-        // Undo the move
         state[move.from] = pieceMoving;
         state[move.to] = boardSave;
 
@@ -601,23 +609,21 @@ void Chess::updateAI()
     std::string state = stateString();
     _countMoves = 0;
 
-    // Search through current legal moves
+    int playerColor = (_currentPlayer == WHITE) ? WHITE : BLACK;
+    const int searchDepth = 5;
+
     for(auto move : _moves) {
         char boardSave = state[move.to];
         char pieceMoving = state[move.from];
 
-        // Make the move on our state copy
         state[move.to] = pieceMoving;
         state[move.from] = '0';
 
-        // Call negamax to evaluate this move
-        int moveVal = -negamax(state, 5, negInfinite, posInfinite, WHITE);
+        int moveVal = -negamax(state, searchDepth - 1, -posInfinite, -negInfinite, -playerColor);
 
-        // Undo the move
         state[move.from] = pieceMoving;
         state[move.to] = boardSave;
 
-        // Track the best move found
         if (moveVal > bestVal) {
             bestMove = move;
             bestVal = moveVal;
@@ -628,9 +634,13 @@ void Chess::updateAI()
         std::cout << "Moves checked: " << _countMoves << std::endl;
         int srcSquare = bestMove.from;
         int dstSquare = bestMove.to;
-        BitHolder& src = getHolderAt(srcSquare&7, srcSquare/8);
-        BitHolder& dst = getHolderAt(dstSquare&7, dstSquare/8);
+        BitHolder& src = getHolderAt(srcSquare & 7, srcSquare / 8);
+        BitHolder& dst = getHolderAt(dstSquare & 7, dstSquare / 8);
         Bit* bit = src.bit();
+        if (!bit) {
+            std::cerr << "AI selected a move from an empty source square! Aborting AI move." << std::endl;
+            return;
+        }
         dst.dropBitAtPoint(bit, ImVec2(0, 0));
         src.setBit(nullptr);
         bitMovedFromTo(*bit, src, dst);

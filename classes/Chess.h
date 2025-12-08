@@ -93,8 +93,8 @@ private:
 
     int posInfinite = INT_MAX;
     int negInfinite = INT_MIN;
-    int _countMoves;
-    int _currentPlayer;
+    int _countMoves = 0;
+    int _currentPlayer = WHITE;
     Grid* _grid;
     std::vector<BitMove>    _moves;
     BitBoard _bitboards[e_numBitboards];
